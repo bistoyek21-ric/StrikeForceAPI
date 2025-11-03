@@ -154,6 +154,7 @@ def get_backup_dir(bot, serial):
     return Path("backups") / bot / serial
 
 # ====================== Admin Endpoints ======================
+# curl --noproxy "*" -X POST "http://URL/StrikeForce/admin/add_bot?admin_key=ADMIN_KEY&bot=BOT_NAME"
 @app.route("/StrikeForce/admin/add_bot", methods=["POST"])
 @global_exception_handler
 def admin_add_bot():
@@ -191,6 +192,58 @@ def admin_add_bot():
         mimetype="application/json"
     )
 
+# curl --noproxy "*" -X POST "http://URL/StrikeForce/admin/delete_bot?admin_key=ADMIN_KEY&bot=BOT_NAME"
+@app.route("/StrikeForce/admin/delete_bot", methods=["POST"])
+@global_exception_handler
+def admin_delete_bot():
+    """Delete a bot and all its backups"""
+    if not validate_admin():
+        return Response(
+            json.dumps({"status": "error", "message": "Unauthorized"}),
+            status=401,
+            mimetype="application/json"
+        )
+    
+    bot = request.args.get("bot")
+    if not bot:
+        return Response(
+            json.dumps({"status": "error", "message": "Missing bot name"}),
+            status=400,
+            mimetype="application/json"
+        )
+    
+    bot_index = find_bot_index(bot)
+    if bot_index == -1:
+        return Response(
+            json.dumps({"status": "error", "message": "Bot not found"}),
+            status=404,
+            mimetype="application/json"
+        )
+    
+    # Delete from filesystem
+    bot_dir = Path("backups") / bot
+    if bot_dir.exists():
+        try:
+            shutil.rmtree(bot_dir)
+        except Exception as e:
+            logging.error(f"Failed to delete bot directory: {str(e)}")
+            return Response(
+                json.dumps({"status": "error", "message": "Failed to delete bot directory"}),
+                status=500,
+                mimetype="application/json"
+            )
+    
+    # Delete from memory
+    del bots[bot_index]
+    del backups[bot_index]
+    
+    logging.info(f"Deleted bot: {bot}")
+    return Response(
+        json.dumps({"status": "success", "message": "Bot deleted"}),
+        mimetype="application/json"
+    )
+
+# curl --noproxy "*" -X POST -F "file=@/path/to/backup.zip" "http://URL/StrikeForce/admin/add_backup?admin_key=ADMIN_KEY&bot=BOT_NAME"
 @app.route("/StrikeForce/admin/add_backup", methods=["POST"])
 @global_exception_handler
 def admin_add_backup():
@@ -259,6 +312,7 @@ def admin_add_backup():
         mimetype="application/json"
     )
 
+# curl --noproxy "*" -X POST "http://URL/StrikeForce/admin/delete_backup?admin_key=ADMIN_KEY&bot=BOT_NAME&serial=SERIAL"
 @app.route("/StrikeForce/admin/delete_backup", methods=["POST"])
 @global_exception_handler
 def admin_delete_backup():
@@ -321,56 +375,7 @@ def admin_delete_backup():
             mimetype="application/json"
         )
 
-@app.route("/StrikeForce/admin/delete_bot", methods=["POST"])
-@global_exception_handler
-def admin_delete_bot():
-    """Delete a bot and all its backups"""
-    if not validate_admin():
-        return Response(
-            json.dumps({"status": "error", "message": "Unauthorized"}),
-            status=401,
-            mimetype="application/json"
-        )
-    
-    bot = request.args.get("bot")
-    if not bot:
-        return Response(
-            json.dumps({"status": "error", "message": "Missing bot name"}),
-            status=400,
-            mimetype="application/json"
-        )
-    
-    bot_index = find_bot_index(bot)
-    if bot_index == -1:
-        return Response(
-            json.dumps({"status": "error", "message": "Bot not found"}),
-            status=404,
-            mimetype="application/json"
-        )
-    
-    # Delete from filesystem
-    bot_dir = Path("backups") / bot
-    if bot_dir.exists():
-        try:
-            shutil.rmtree(bot_dir)
-        except Exception as e:
-            logging.error(f"Failed to delete bot directory: {str(e)}")
-            return Response(
-                json.dumps({"status": "error", "message": "Failed to delete bot directory"}),
-                status=500,
-                mimetype="application/json"
-            )
-    
-    # Delete from memory
-    del bots[bot_index]
-    del backups[bot_index]
-    
-    logging.info(f"Deleted bot: {bot}")
-    return Response(
-        json.dumps({"status": "success", "message": "Bot deleted"}),
-        mimetype="application/json"
-    )
-
+# curl --noproxy "*" "http://URL/StrikeForce/admin/get_crypto?admin_key=ADMIN_KEY"
 @app.route("/StrikeForce/admin/get_crypto", methods=["GET"])
 @global_exception_handler
 def admin_get_crypto():
@@ -392,6 +397,7 @@ def admin_get_crypto():
     )
 
 # ====================== API Endpoints ======================
+# curl --noproxy "*" -o backup.zip "http://URL/StrikeForce/api/request_backup?bot=BOT_NAME"
 @app.route("/StrikeForce/api/request_backup", methods=["GET"])
 @global_exception_handler
 def request_backup():
@@ -448,6 +454,7 @@ def request_backup():
             mimetype="application/json"
         )
 
+# curl --noproxy "*" -X POST -F "file=@/path/to/modified_backup.zip" "http://URL/StrikeForce/api/return_backup"
 @app.route("/StrikeForce/api/return_backup", methods=["POST"])
 @global_exception_handler
 def return_backup():
